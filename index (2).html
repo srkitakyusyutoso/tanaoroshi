@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>品番スキャナー</title>
+<style>
+  :root{--bg:#14181d;--panel:#1e252d;--line:#333d48;--text:#e8edf2;--sub:#8a97a5;--ok:#35c66b;--accent:#ffb020;--err:#ff5c5c}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--text);font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;display:flex;flex-direction:column}
+  header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:10px}
+  header h1{font-size:16px;font-weight:700;letter-spacing:.08em}
+  header .status{font-size:12px;color:var(--sub)}
+  #shootArea{padding:16px}
+  #shootBtn{display:block;width:100%;padding:24px 0;font-size:20px;font-weight:700;letter-spacing:.1em;color:#14181d;background:var(--accent);border:none;border-radius:12px;font-family:inherit}
+  #shootBtn:active{transform:scale(.98)}
+  #shootBtn:disabled{background:#6b5a2a;color:#3a3a3a}
+  #fileInput{display:none}
+  #flash{position:fixed;inset:0;background:var(--ok);opacity:0;pointer-events:none;transition:opacity .25s;z-index:50}
+  #flash.on{opacity:.55;transition:none}
+  #result{padding:16px;text-align:center;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel)}
+  #result .label{font-size:11px;color:var(--sub);letter-spacing:.2em;margin-bottom:4px}
+  #hinban{font-family:"SF Mono","Roboto Mono",Consolas,monospace;font-size:clamp(20px,6vw,30px);font-weight:700;letter-spacing:.04em;word-break:break-all;min-height:1.3em}
+  #hinban.ok{color:var(--ok)}
+  #hinban.err{color:var(--err);font-size:15px;font-weight:400}
+  #hinban.busy{color:var(--sub);font-size:17px;font-weight:400}
+  #masterInfo{display:none;margin-top:10px;padding:10px 12px;background:rgba(91,168,247,.1);border:1px solid rgba(91,168,247,.25);border-radius:8px;text-align:left}
+  #masterInfo.show{display:block}
+  .master-row{display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:15px}
+  .master-row .mk{font-size:11px;color:var(--sub);letter-spacing:.1em;flex-shrink:0;width:32px}
+  .master-row .mv{font-weight:700}
+  #sendState{font-size:12px;margin-top:8px;color:var(--sub);min-height:1.2em}
+  #sendState.ok{color:var(--ok)}
+  #sendState.err{color:var(--err)}
+  #qtyArea{display:none;padding:14px 16px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+  #qtyArea.show{display:block}
+  #qtyArea .label{font-size:11px;color:var(--sub);letter-spacing:.2em;text-align:center;margin-bottom:8px}
+  .qty-row{display:flex;gap:10px;align-items:stretch}
+  .qty-step{flex:0 0 64px;font-size:28px;font-weight:700;color:var(--text);background:#2a3340;border:1px solid var(--line);border-radius:10px}
+  .qty-step:active{background:#384456}
+  #qtyInput{flex:1;min-width:0;text-align:center;font-size:32px;font-weight:700;font-family:"SF Mono","Roboto Mono",Consolas,monospace;color:var(--text);background:var(--bg);border:2px solid var(--line);border-radius:10px;padding:8px 4px}
+  #qtyInput:focus{outline:none;border-color:var(--accent)}
+  #recordBtn{display:block;width:100%;margin-top:12px;padding:18px 0;font-size:18px;font-weight:700;letter-spacing:.1em;color:#fff;background:#1f9e53;border:none;border-radius:12px;font-family:inherit}
+  #recordBtn:active{transform:scale(.98)}
+  #recordBtn:disabled{background:#2a4a38;color:#6a7a70}
+  #history{flex:1;overflow-y:auto;padding:10px 16px 24px}
+  #history h2{font-size:11px;color:var(--sub);letter-spacing:.2em;margin:8px 0}
+  .hist-item{padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .hist-top{display:flex;justify-content:space-between;align-items:center;gap:6px;font-family:"SF Mono","Roboto Mono",Consolas,monospace;font-size:14px}
+  .hist-top .h{flex:1;word-break:break-all}
+  .hist-top .q{color:var(--accent);font-weight:700;white-space:nowrap}
+  .hist-top .t{color:var(--sub);font-size:12px;white-space:nowrap}
+  .hist-sub{color:var(--sub);font-size:12px;margin-top:2px}
+</style>
+</head>
+<body>
+<div id="flash"></div>
+<header>
+  <h1>品番スキャナー</h1>
+  <span class="status" id="engineStatus">準備中…</span>
+</header>
+<div id="shootArea">
+  <button id="shootBtn" disabled>📷 QRを撮影する</button>
+  <input type="file" id="fileInput" accept="image/*" capture="environment">
+</div>
+<div id="result">
+  <div class="label">品 番</div>
+  <div id="hinban">ボタンを押してQRコードを撮影してください</div>
+  <div id="masterInfo">
+    <div class="master-row"><span class="mk">車種</span><span class="mv" id="mSyasyu"></span></div>
+    <div class="master-row"><span class="mk">品名</span><span class="mv" id="mHinmei"></span></div>
+  </div>
+  <div id="sendState"></div>
+</div>
+<div id="qtyArea">
+  <div class="label">数 量</div>
+  <div class="qty-row">
+    <button class="qty-step" id="qtyMinus">−</button>
+    <input type="text" id="qtyInput" inputmode="numeric" pattern="[0-9]*" placeholder="0">
+    <button class="qty-step" id="qtyPlus">＋</button>
+  </div>
+  <button id="recordBtn">✓ この内容で記録する</button>
+</div>
+<div id="history">
+  <h2>このセッションの記録</h2>
+  <div id="histList"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.0/dist/iife/reader/index.js"></script>
+<script>
+function extractHinban(raw){
+  if(raw.length>=76){var f=raw.substring(36,76).trim();if(f)return f}
+  var p=raw.trim().split(/\s+/);
+  return p.length>=2?p[1]:raw.trim();
+}
+
+var shootBtn=document.getElementById('shootBtn');
+var fileInput=document.getElementById('fileInput');
+var hinbanEl=document.getElementById('hinban');
+var stateEl=document.getElementById('sendState');
+var histEl=document.getElementById('histList');
+var engineEl=document.getElementById('engineStatus');
+var qtyArea=document.getElementById('qtyArea');
+var qtyInput=document.getElementById('qtyInput');
+var recordBtn=document.getElementById('recordBtn');
+var masterInfo=document.getElementById('masterInfo');
+var mSyasyu=document.getElementById('mSyasyu');
+var mHinmei=document.getElementById('mHinmei');
+var pending=null;
+var READ_OPTS={formats:['QRCode'],tryHarder:true,tryRotate:true,tryInvert:true,maxNumberOfSymbols:1};
+
+function feedback(){
+  if(navigator.vibrate)navigator.vibrate(120);
+  try{var c=new(window.AudioContext||window.webkitAudioContext)();var o=c.createOscillator();var g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=1400;g.gain.setValueAtTime(.25,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.18);o.start();o.stop(c.currentTime+.18)}catch(e){}
+  var f=document.getElementById('flash');f.classList.add('on');setTimeout(function(){f.classList.remove('on')},60);
+}
+
+ZXingWASM.prepareZXingModule({fireImmediately:true})
+  .then(function(){engineEl.textContent='準備完了';shootBtn.disabled=false})
+  .catch(function(){engineEl.textContent='準備完了';shootBtn.disabled=false});
+
+function preprocess(bitmap,maxSide,k){
+  var scale=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
+  var w=Math.round(bitmap.width*scale),h=Math.round(bitmap.height*scale);
+  var canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+  var ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0,w,h);
+  var imgData=ctx.getImageData(0,0,w,h),d=imgData.data;
+  for(var i=0;i<w*h;i++){var gray=(d[i*4]*299+d[i*4+1]*587+d[i*4+2]*114)/1000;var v=Math.max(0,Math.min(255,(gray-128)*k+128));d[i*4]=d[i*4+1]=d[i*4+2]=v}
+  return imgData;
+}
+
+function decodePhoto(file){
+  return ZXingWASM.readBarcodes(file,READ_OPTS).then(function(r){
+    if(r.length&&r[0].text)return r[0].text;
+    return createImageBitmap(file).then(function(bitmap){
+      var plans=[[1600,1.5],[2400,2.0],[3200,1.5]];
+      function tryNext(idx){
+        if(idx>=plans.length){bitmap.close();return null}
+        return ZXingWASM.readBarcodes(preprocess(bitmap,plans[idx][0],plans[idx][1]),READ_OPTS).then(function(r2){
+          if(r2.length&&r2[0].text){bitmap.close();return r2[0].text}
+          return tryNext(idx+1);
+        }).catch(function(){return tryNext(idx+1)});
+      }
+      return tryNext(0);
+    });
+  }).catch(function(){return null});
+}
+
+function getQty(){var n=parseInt(qtyInput.value,10);return(isNaN(n)||n<0)?null:n}
+document.getElementById('qtyPlus').addEventListener('click',function(){qtyInput.value=String((getQty()||0)+1)});
+document.getElementById('qtyMinus').addEventListener('click',function(){qtyInput.value=String(Math.max(0,(getQty()||0)-1))});
+qtyInput.addEventListener('input',function(){qtyInput.value=qtyInput.value.replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-65248)}).replace(/[^0-9]/g,'')});
+
+shootBtn.addEventListener('click',function(){fileInput.click()});
+
+fileInput.addEventListener('change',function(){
+  var file=fileInput.files[0];fileInput.value='';if(!file)return;
+  shootBtn.disabled=true;pending=null;
+  qtyArea.classList.remove('show');masterInfo.classList.remove('show');
+  hinbanEl.textContent='解析中…';hinbanEl.className='busy';
+  stateEl.textContent='';stateEl.className='';
+
+  decodePhoto(file).then(function(raw){
+    shootBtn.disabled=false;
+    if(!raw){hinbanEl.textContent='読み取れませんでした。QRコードに近づいて撮影し直してください。';hinbanEl.className='err';return}
+    var hinban=extractHinban(raw);
+    feedback();
+    pending={hinban:hinban,raw:raw};
+    hinbanEl.textContent=hinban;hinbanEl.className='ok';
+    stateEl.textContent='数量を入力して「記録する」を押してください';
+    qtyInput.value='';qtyArea.classList.add('show');
+    setTimeout(function(){qtyInput.focus()},100);
+  });
+});
+
+recordBtn.addEventListener('click',function(){
+  if(!pending)return;
+  var qty=getQty();
+  if(qty===null||qtyInput.value===''){stateEl.textContent='数量を入力してください';stateEl.className='err';qtyInput.focus();return}
+  recordBtn.disabled=true;stateEl.textContent='記録中…';stateEl.className='';
+  var s=pending;
+  google.script.run
+    .withSuccessHandler(function(res){
+      recordBtn.disabled=false;
+      if(res.syasyu||res.hinmei){
+        mSyasyu.textContent=res.syasyu||'—';
+        mHinmei.textContent=res.hinmei||'—';
+        masterInfo.classList.add('show');
+      }
+      stateEl.textContent='✓ 記録しました ('+res.time+')';stateEl.className='ok';
+      addHistory(res.hinban,res.syasyu,res.hinmei,res.suryo,res.time);
+      pending=null;qtyArea.classList.remove('show');qtyInput.blur();
+    })
+    .withFailureHandler(function(err){
+      recordBtn.disabled=false;
+      stateEl.textContent='エラー: '+String(err);stateEl.className='err';
+    })
+    .scanAndRecord(s.hinban,qty,s.raw);
+});
+
+function addHistory(hinban,syasyu,hinmei,suryo,time){
+  var div=document.createElement('div');div.className='hist-item';
+  var top=document.createElement('div');top.className='hist-top';
+  top.innerHTML='<span class="h"></span><span class="q"></span><span class="t"></span>';
+  top.children[0].textContent=hinban;top.children[1].textContent='×'+suryo;top.children[2].textContent=time;
+  div.appendChild(top);
+  if(syasyu||hinmei){var sub=document.createElement('div');sub.className='hist-sub';sub.textContent=[syasyu,hinmei].filter(Boolean).join(' / ');div.appendChild(sub)}
+  histEl.prepend(div);
+  while(histEl.children.length>30)histEl.removeChild(histEl.lastChild);
+}
+</script>
+</body>
+</html>
