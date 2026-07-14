@@ -41,10 +41,7 @@
   .jig-row{display:flex;align-items:flex-end;gap:6px}
   .jig-field{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
   .jig-field label{font-size:10px;color:var(--sub);text-align:center}
-  .jig-field .jig-num-row{display:flex;gap:4px}
-  .jig-step{flex:0 0 34px;font-size:18px;font-weight:700;color:var(--text);background:#2a3340;border:1px solid var(--line);border-radius:8px}
-  .jig-step:active{background:#384456}
-  .jig-input{flex:1;min-width:0;text-align:center;font-size:22px;font-weight:700;font-family:"SF Mono","Roboto Mono",Consolas,monospace;color:var(--text);background:var(--bg);border:2px solid var(--line);border-radius:8px;padding:6px 2px}
+  .jig-input{width:100%;text-align:center;font-size:22px;font-weight:700;font-family:"SF Mono","Roboto Mono",Consolas,monospace;color:var(--text);background:var(--bg);border:2px solid var(--line);border-radius:8px;padding:6px 2px}
   .jig-input:focus{outline:none;border-color:var(--accent)}
   .jig-op{padding-bottom:10px;font-size:20px;font-weight:700;color:var(--sub)}
   #totalDisplay{text-align:center;margin-top:10px;font-size:14px;color:var(--sub)}
@@ -105,27 +102,17 @@
   <div class="jig-row">
     <div class="jig-field">
       <label>治具数</label>
-      <div class="jig-num-row">
-        <button class="jig-step" id="jigCountMinus">−</button>
-        <input type="text" id="jigCountInput" class="jig-input" inputmode="numeric" pattern="[0-9]*" placeholder="0">
-        <button class="jig-step" id="jigCountPlus">＋</button>
-      </div>
+      <input type="text" id="jigCountInput" class="jig-input" inputmode="numeric" pattern="[0-9]*" placeholder="0">
     </div>
     <span class="jig-op">×</span>
     <div class="jig-field">
       <label>1治具あたり</label>
-      <div class="jig-num-row">
-        <input type="text" id="jigQtyInput" class="jig-input" inputmode="numeric" pattern="[0-9]*" placeholder="0">
-      </div>
+      <input type="text" id="jigQtyInput" class="jig-input" inputmode="numeric" pattern="[0-9]*" placeholder="0">
     </div>
     <span class="jig-op">+</span>
     <div class="jig-field">
       <label>端数</label>
-      <div class="jig-num-row">
-        <button class="jig-step" id="remainderMinus">−</button>
-        <input type="text" id="remainderInput" class="jig-input" inputmode="numeric" pattern="[0-9]*" placeholder="0">
-        <button class="jig-step" id="remainderPlus">＋</button>
-      </div>
+      <input type="text" id="remainderInput" class="jig-input" inputmode="numeric" pattern="[0-9]*" placeholder="0">
     </div>
   </div>
   <div id="totalDisplay">合計 <span class="tnum" id="totalNum">0</span> 個</div>
@@ -148,11 +135,6 @@
 <script>
 var GAS_URL='https://script.google.com/macros/s/AKfycbzE55x-ubKz4K-UShmCSlLJODRxFBAjCQRzjt5FiUn1Ni8kCU7ndlZQ5l7jH5wF5eJx/exec';
 
-// ------------------------------------------------------------
-// JSONP通信ヘルパー
-// GitHub Pages（別ドメイン）からGASを呼ぶとCORSの制約で応答が読めないため、
-// <script>タグ読み込み（JSONP）で呼び出す。
-// ------------------------------------------------------------
 function jsonpRequest(params){
   return new Promise(function(resolve,reject){
     var cbName='jsonp_cb_'+Date.now()+'_'+Math.floor(Math.random()*100000);
@@ -256,15 +238,12 @@ function getIntVal(el){var n=parseInt(el.value,10);return isNaN(n)||n<0?0:n}
 function recalcTotal(){
   var total=getIntVal(jigCountInput)*getIntVal(jigQtyInput)+getIntVal(remainderInput);
   totalNum.textContent=String(total);
+  recordBtn.disabled=(total<=0);
   return total;
 }
 [jigCountInput,jigQtyInput,remainderInput].forEach(function(el){
   el.addEventListener('input',function(){el.value=toHalfWidthDigits(el.value);recalcTotal();});
 });
-document.getElementById('jigCountPlus').addEventListener('click',function(){jigCountInput.value=String(getIntVal(jigCountInput)+1);recalcTotal();});
-document.getElementById('jigCountMinus').addEventListener('click',function(){jigCountInput.value=String(Math.max(0,getIntVal(jigCountInput)-1));recalcTotal();});
-document.getElementById('remainderPlus').addEventListener('click',function(){remainderInput.value=String(getIntVal(remainderInput)+1);recalcTotal();});
-document.getElementById('remainderMinus').addEventListener('click',function(){remainderInput.value=String(Math.max(0,getIntVal(remainderInput)-1));recalcTotal();});
 
 function resetJigFields(defaultJigQty){
   jigCountInput.value='';
