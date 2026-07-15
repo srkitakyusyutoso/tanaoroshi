@@ -46,6 +46,10 @@
   .jig-op{padding-bottom:10px;font-size:20px;font-weight:700;color:var(--sub)}
   #totalDisplay{text-align:center;margin-top:10px;font-size:14px;color:var(--sub)}
   #totalDisplay .tnum{font-size:24px;font-weight:700;color:var(--accent);font-family:"SF Mono","Roboto Mono",Consolas,monospace}
+  #stageRow{display:flex;gap:8px;margin-top:12px}
+  .stage-btn{flex:1;padding:12px 0;font-size:14px;font-weight:700;border-radius:10px;border:1px solid var(--line);background:#2a3340;color:var(--sub);font-family:inherit}
+  .stage-btn.active{background:var(--accent);color:#14181d;border-color:var(--accent)}
+  .stage-btn:active{transform:scale(.98)}
   #recordBtn{display:block;width:100%;margin-top:12px;padding:18px 0;font-size:18px;font-weight:700;letter-spacing:.1em;color:#fff;background:#1f9e53;border:none;border-radius:12px;font-family:inherit}
   #recordBtn:active{transform:scale(.98)}
   #recordBtn:disabled{background:#2a4a38;color:#6a7a70}
@@ -116,6 +120,10 @@
     </div>
   </div>
   <div id="totalDisplay">合計 <span class="tnum" id="totalNum">0</span> 個</div>
+  <div id="stageRow">
+    <button type="button" class="stage-btn" id="stageBeforeBtn">検査前</button>
+    <button type="button" class="stage-btn" id="stageAfterBtn">検査後</button>
+  </div>
   <button id="recordBtn">✓ この内容で記録する</button>
   <button id="cancelEditBtn">キャンセル</button>
 </div>
@@ -180,6 +188,8 @@ var jigCountInput=document.getElementById('jigCountInput');
 var jigQtyInput=document.getElementById('jigQtyInput');
 var remainderInput=document.getElementById('remainderInput');
 var totalNum=document.getElementById('totalNum');
+var stageBeforeBtn=document.getElementById('stageBeforeBtn');
+var stageAfterBtn=document.getElementById('stageAfterBtn');
 var recordBtn=document.getElementById('recordBtn');
 var cancelEditBtn=document.getElementById('cancelEditBtn');
 var masterInfo=document.getElementById('masterInfo');
@@ -193,7 +203,17 @@ var nextBtn=document.getElementById('nextBtn');
 var pending=null;
 var lastRecord=null;
 var mode='new';
+var currentStage='検査前';
 var READ_OPTS={formats:['QRCode'],tryHarder:true,tryRotate:true,tryInvert:true,maxNumberOfSymbols:1};
+
+function setStage(stage){
+  currentStage=(stage==='検査後')?'検査後':'検査前';
+  stageBeforeBtn.classList.toggle('active',currentStage==='検査前');
+  stageAfterBtn.classList.toggle('active',currentStage==='検査後');
+}
+stageBeforeBtn.addEventListener('click',function(){setStage('検査前')});
+stageAfterBtn.addEventListener('click',function(){setStage('検査後')});
+setStage('検査前');
 
 function feedback(){
   if(navigator.vibrate)navigator.vibrate(120);
@@ -324,6 +344,7 @@ correctBtn.addEventListener('click',function(){
   jigCountInput.value=lastRecord.jigCount||'';
   jigQtyInput.value=lastRecord.jigQty||'';
   remainderInput.value=(lastRecord.remainder!==undefined&&lastRecord.remainder!==null)?lastRecord.remainder:lastRecord.suryo;
+  setStage(lastRecord.inspectionStage||'検査前');
   recalcTotal();
   qtyArea.classList.add('show');
   setTimeout(function(){jigCountInput.focus()},100);
@@ -345,7 +366,7 @@ recordBtn.addEventListener('click',function(){
   if(mode==='correct'){
     if(!lastRecord)return;
     recordBtn.disabled=true;stateEl.textContent='訂正を保存中…';stateEl.className='';
-    jsonpRequest({action:'correctLastRecord',recordId:lastRecord.recordId,newSuryo:qty,sessionId:sessionId,jigCount:jigCount,jigQty:jigQty,remainder:remainder})
+    jsonpRequest({action:'correctLastRecord',recordId:lastRecord.recordId,newSuryo:qty,sessionId:sessionId,jigCount:jigCount,jigQty:jigQty,remainder:remainder,inspectionStage:currentStage})
       .then(function(res){
         recordBtn.disabled=false;
         if(res&&res.error){stateEl.textContent='エラー: '+res.error;stateEl.className='err';return}
@@ -353,6 +374,7 @@ recordBtn.addEventListener('click',function(){
         lastRecord.suryo=res.suryo;
         lastRecord.correctionCount=res.correctionCount;
         lastRecord.jigCount=jigCount;lastRecord.jigQty=jigQty;lastRecord.remainder=remainder;
+        lastRecord.inspectionStage=currentStage;
         updateHistoryItem(lastRecord.recordId,res.suryo,res.correctionCount);
         qtyArea.classList.remove('show');
         mode='new';
@@ -368,7 +390,7 @@ recordBtn.addEventListener('click',function(){
   if(!pending)return;
   recordBtn.disabled=true;stateEl.textContent='記録中…';stateEl.className='';
   var s=pending;
-  jsonpRequest({action:'scanAndRecord',hinban:s.hinban,suryo:qty,rawData:s.raw,sessionId:sessionId,userName:getUserName(),jigCount:jigCount,jigQty:jigQty,remainder:remainder})
+  jsonpRequest({action:'scanAndRecord',hinban:s.hinban,suryo:qty,rawData:s.raw,sessionId:sessionId,userName:getUserName(),jigCount:jigCount,jigQty:jigQty,remainder:remainder,inspectionStage:currentStage})
     .then(function(res){
       recordBtn.disabled=false;
       if(res&&res.error){stateEl.textContent='エラー: '+res.error;stateEl.className='err';return}
@@ -378,7 +400,7 @@ recordBtn.addEventListener('click',function(){
         masterInfo.classList.add('show');
       }
       stateEl.textContent='✓ 記録しました ('+res.time+')';stateEl.className='ok';
-      lastRecord={recordId:res.recordId,hinban:res.hinban,syasyu:res.syasyu,hinmei:res.hinmei,suryo:res.suryo,time:res.time,correctionCount:0,jigCount:jigCount,jigQty:jigQty,remainder:remainder};
+      lastRecord={recordId:res.recordId,hinban:res.hinban,syasyu:res.syasyu,hinmei:res.hinmei,suryo:res.suryo,time:res.time,correctionCount:0,jigCount:jigCount,jigQty:jigQty,remainder:remainder,inspectionStage:currentStage};
       addHistory(lastRecord);
       pending=null;qtyArea.classList.remove('show');
       showPostRecord(lastRecord);
@@ -391,6 +413,9 @@ recordBtn.addEventListener('click',function(){
 
 function showPostRecord(rec){
   var lines='<span class="ph">'+rec.hinban+'</span>　<span class="pq">×'+rec.suryo+'</span>';
+  if(rec.inspectionStage){
+    lines+='　<span style="font-size:12px;color:var(--sub);border:1px solid var(--line);border-radius:6px;padding:2px 6px">'+rec.inspectionStage+'</span>';
+  }
   if(rec.syasyu||rec.hinmei){
     lines+='<br><span style="color:var(--sub);font-size:13px">'+[rec.syasyu,rec.hinmei].filter(Boolean).join(' / ')+'</span>';
   }
@@ -403,7 +428,8 @@ function addHistory(rec){
   div.dataset.recordId=rec.recordId;
   var top=document.createElement('div');top.className='hist-top';
   top.innerHTML='<span class="h"></span><span class="q"></span><span class="t"></span>';
-  top.children[0].textContent=rec.hinban;top.children[1].textContent='×'+rec.suryo;top.children[2].textContent=rec.time;
+  top.children[0].textContent=(rec.inspectionStage?'['+rec.inspectionStage+'] ':'')+rec.hinban;
+  top.children[1].textContent='×'+rec.suryo;top.children[2].textContent=rec.time;
   div.appendChild(top);
   if(rec.syasyu||rec.hinmei){var sub=document.createElement('div');sub.className='hist-sub';sub.textContent=[rec.syasyu,rec.hinmei].filter(Boolean).join(' / ');div.appendChild(sub)}
   histEl.prepend(div);
